@@ -99,6 +99,21 @@ func TestAccApiManagementApiOperation_requestRepresentations(t *testing.T) {
 	})
 }
 
+func TestAccApiManagementApiOperation_request_valuesNoDefault(t *testing.T) {
+	data := acceptance.BuildTestData(t, "azurerm_api_management_api_operation", "test")
+	r := ApiManagementApiOperationResource{}
+
+	data.ResourceTest(t, r, []acceptance.TestStep{
+		{
+			Config: r.requestValuesNoDefault(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+			),
+		},
+		data.ImportStep(),
+	})
+}
+
 func TestAccApiManagementApiOperation_representations(t *testing.T) {
 	// TODO: once `azurerm_api_management_schema` is supported add `request.0.representation.0.schema_id`
 	data := acceptance.BuildTestData(t, "azurerm_api_management_api_operation", "test")
@@ -236,6 +251,46 @@ resource "azurerm_api_management_api_operation" "test" {
       content_type = "application/json"
       type_name    = "User"
     }
+  }
+}
+`, r.template(data))
+}
+
+func (r ApiManagementApiOperationResource) requestValuesNoDefault(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+%s
+
+resource "azurerm_api_management_api_operation" "test" {
+  operation_id        = "acctest-operation"
+  api_name            = azurerm_api_management_api.test.name
+  api_management_name = azurerm_api_management.test.name
+  resource_group_name = azurerm_resource_group.test.name
+  display_name        = "Acceptance Test Operation"
+  method              = "DELETE"
+  url_template        = "/user1/{test}"
+  description         = "This can only be done by the logged in user."
+
+  template_parameter {
+    name = "test"
+    required = false
+    type     = "string"
+    values   = ["true", "false"]
+  }
+  request {
+    description = "Created user object"
+
+    query_parameter {
+      name     = "test"
+      required = false
+      type     = "string"
+      values   = ["true", "false"]
+    }
+    header {
+	  name = "test"
+      required = false
+      type     = "string"
+      values   = ["true", "false"]
+	}
   }
 }
 `, r.template(data))
