@@ -142,7 +142,7 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 	if properties := resp.SchemaContractProperties; properties != nil {
 		d.Set("content_type", properties.ContentType)
 		if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
-			d.Set("value", documentProperties.Value)
+			d.Set("value", documentProperties.Definitions)
 		}
 	}
 
