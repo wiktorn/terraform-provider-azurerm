@@ -1,0 +1,19 @@
+{
+      "schema-bug-example": {
+          "type": "object",
+          "properties": {
+              "field1": {
+                  "type": "string",
+                  "description": "Field1"
+              },
+              "Field2": {
+                  "type": "string",
+                  "description": "Field2"
+              },
+          },
+          "required": [
+              "field1",
+              "Field2",
+          ]
+      }
+}
