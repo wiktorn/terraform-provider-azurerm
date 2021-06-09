@@ -142,7 +142,21 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 	if properties := resp.SchemaContractProperties; properties != nil {
 		d.Set("content_type", properties.ContentType)
 		if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
-			d.Set("value", documentProperties.Definitions)
+			/*
+				- Swagger Schema use application/vnd.ms-azure-apim.swagger.definitions+json
+				- WSDL Schema use application/vnd.ms-azure-apim.xsd+xml
+				- OpenApi Schema use application/vnd.oai.openapi.components+json
+				- WADL Schema use application/vnd.ms-azure-apim.wadl.grammars+xml.
+
+				Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
+			*/
+			if properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || properties.ContentType == "application/vnd.oai.openapi.components+json" {
+				d.Set("value", documentProperties.Definitions)
+			} else if properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
+				d.Set("value", documentProperties.Value)
+			} else {
+				return fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", properties.ContentType, schemaID, serviceName, apiName, resourceGroup)
+			}
 		}
 	}
 
