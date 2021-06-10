@@ -1,6 +1,7 @@
 package apimanagement
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -123,6 +124,12 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 	apiName := id.ApiName
 	schemaID := id.SchemaName
 
+    if err := resource.Retry(5*time.Minute, r.tryRun); err != nil {
+    return err
+  }
+
+  return nil
+
 	resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
 	if err != nil {
 		if utils.ResponseWasNotFound(resp.Response) {
@@ -143,19 +150,23 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 		d.Set("content_type", properties.ContentType)
 		if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
 			/*
-				- Swagger Schema use application/vnd.ms-azure-apim.swagger.definitions+json
-				- WSDL Schema use application/vnd.ms-azure-apim.xsd+xml
-				- OpenApi Schema use application/vnd.oai.openapi.components+json
-				- WADL Schema use application/vnd.ms-azure-apim.wadl.grammars+xml.
+				        As per https://docs.microsoft.com/en-us/rest/api/apimanagement/2019-12-01/api-schema/get#schemacontract
 
-				Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
+								- Swagger Schema use application/vnd.ms-azure-apim.swagger.definitions+json
+								- WSDL Schema use application/vnd.ms-azure-apim.xsd+xml
+								- OpenApi Schema use application/vnd.oai.openapi.components+json
+								- WADL Schema use application/vnd.ms-azure-apim.wadl.grammars+xml.
+
+								Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
 			*/
-			if properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || properties.ContentType == "application/vnd.oai.openapi.components+json" {
-				d.Set("value", documentProperties.Definitions)
-			} else if properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
+			if *properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || *properties.ContentType == "application/vnd.oai.openapi.components+json" {
+				var value []byte
+				err = json.Unmarshal(value, documentProperties.Definitions)
+				d.Set("value", string(value))
+			} else if *properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || *properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
 				d.Set("value", documentProperties.Value)
 			} else {
-				return fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", properties.ContentType, schemaID, serviceName, apiName, resourceGroup)
+				return fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", *properties.ContentType, schemaID, serviceName, apiName, resourceGroup)
 			}
 		}
 	}

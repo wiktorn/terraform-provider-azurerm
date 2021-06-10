@@ -21,17 +21,14 @@ type ApiManagementApiSchemaResource struct {
 func TestAccApiManagementApiSchema_basic(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_api_management_api_schema", "test")
 	r := ApiManagementApiSchemaResource{}
-	schema, err := ioutil.ReadFile("testdata/api_management_api_schema.xml")
-	if err != nil {
-		return fmt.Errorf("Unable to read schema file testdata/api_management_api_schema.xml")
-	}
+	schema, _ := ioutil.ReadFile("testdata/api_management_api_schema.xml")
 
 	data.ResourceTest(t, r, []resource.TestStep{
 		{
 			Config: r.basic(data),
 			Check: resource.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
-				check.That(data.ResourceName).Key("value").HasValue(schema),
+				check.That(data.ResourceName).Key("value").HasValue(string(schema)),
 			),
 		},
 		data.ImportStep(),
@@ -41,17 +38,14 @@ func TestAccApiManagementApiSchema_basic(t *testing.T) {
 func TestAccApiManagementApiSchema_basicSwagger(t *testing.T) {
 	data := acceptance.BuildTestData(t, "azurerm_api_management_api_schema", "test")
 	r := ApiManagementApiSchemaResource{}
-	schema, err := ioutil.ReadFile("testdata/api_management_api_schema_swagger.json")
-	if err != nil {
-		return fmt.Errorf("Unable to read schema file testdata/api_management_api_schema_swagger.json")
-	}
+	schema, _ := ioutil.ReadFile("testdata/api_management_api_schema_swagger.json")
 
 	data.ResourceTest(t, r, []resource.TestStep{
 		{
 			Config: r.basicSwagger(data),
 			Check: resource.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
-				check.That(data.ResourceName).Key("value").HasValue(schema),
+				check.That(data.ResourceName).Key("value").HasValue(string(schema)),
 			),
 		},
 		data.ImportStep(),
