@@ -17,6 +17,7 @@ import (
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/helpers/azure"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/helpers/tf"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/internal/clients"
+	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/internal/tf/suppress"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/internal/timeouts"
 	"github.com/terraform-providers/terraform-provider-azurerm/azurerm/utils"
 )
@@ -53,9 +54,10 @@ func resourceApiManagementApiSchema() *schema.Resource {
 			},
 
 			"value": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringIsNotEmpty,
+				Type:             schema.TypeString,
+				Required:         true,
+				DiffSuppressFunc: suppress.JsonDiff,
+				ValidateFunc:     validation.StringIsNotEmpty,
 			},
 		},
 	}
@@ -134,70 +136,62 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 	apiName := id.ApiName
 	schemaID := id.SchemaName
 
-	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
-		resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
-		if err != nil {
-			if utils.ResponseWasNotFound(resp.Response) {
-				log.Printf("[DEBUG] WNS debugs - retrying schema get")
-				return resource.RetryableError(fmt.Errorf("Expected schema %q (API Management Service %q / API %q / Resource Group %q) to be created but was in non existent state, retrying", schemaID, serviceName, apiName, resourceGroup))
-			}
-			return resource.NonRetryableError(fmt.Errorf("Error geting schema %q (API Management Service %q / API %q / Resource Group %q): %+v", schemaID, serviceName, apiName, resourceGroup, err))
-		}
-
-		d.Set("resource_group_name", resourceGroup)
-		d.Set("api_management_name", serviceName)
-		d.Set("api_name", apiName)
-		d.Set("schema_id", schemaID)
-
-		if properties := resp.SchemaContractProperties; properties != nil {
-			d.Set("content_type", properties.ContentType)
-			if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
-				/*
-					As per https://docs.microsoft.com/en-us/rest/api/apimanagement/2019-12-01/api-schema/get#schemacontract
-
-					- Swagger Schema use application/vnd.ms-azure-apim.swagger.definitions+json
-					- WSDL Schema use application/vnd.ms-azure-apim.xsd+xml
-					- OpenApi Schema use application/vnd.oai.openapi.components+json
-					- WADL Schema use application/vnd.ms-azure-apim.wadl.grammars+xml.
-
-					Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
-				*/
-				var value []byte
-				if documentProperties.Definitions != nil {
-					value, err = json.Marshal(documentProperties.Definitions)
-				}
-				log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) WNS debugs", schemaID, serviceName, apiName, resourceGroup)
-				if err != nil {
-					log.Printf("[DEBUG] err: %+v", err)
-				}
-				if value != nil {
-					log.Printf("[DEBUG] schema definition: %q", string(value))
-				}
-				if documentProperties.Value != nil {
-					log.Printf("[DEBUG] schema value: %q", *documentProperties.Value)
-				}
-				if documentProperties.Definitions != nil {
-					log.Printf("[DEBUG] schema definition struct: %+v", documentProperties.Definitions)
-				}
-				if *properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || *properties.ContentType == "application/vnd.oai.openapi.components+json" {
-					//var value []byte
-					//err = json.Unmarshal(value, documentProperties.Definitions)
-					d.Set("value", string(value))
-				} else if *properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || *properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
-					d.Set("value", documentProperties.Value)
-				} else {
-					return resource.NonRetryableError(fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", *properties.ContentType, schemaID, serviceName, apiName, resourceGroup))
-				}
-			}
-		}
-		return nil
-	})
-
-	// resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
+	resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
 	if err != nil {
-		log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) was not found - removing from state!", schemaID, serviceName, apiName, resourceGroup)
-		d.SetId("")
+		if utils.ResponseWasNotFound(resp.Response) {
+			log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) was not found - removing from state!", schemaID, serviceName, apiName, resourceGroup)
+			d.SetId("")
+			return nil
+		}
+
 		return fmt.Errorf("making Read request for API Schema %q (API Management Service %q / API %q / Resource Group %q): %s", schemaID, serviceName, apiName, resourceGroup, err)
+	}
+
+	d.Set("resource_group_name", resourceGroup)
+	d.Set("api_management_name", serviceName)
+	d.Set("api_name", apiName)
+	d.Set("schema_id", schemaID)
+
+	if properties := resp.SchemaContractProperties; properties != nil {
+		d.Set("content_type", properties.ContentType)
+		if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
+			/*
+				As per https://docs.microsoft.com/en-us/rest/api/apimanagement/2019-12-01/api-schema/get#schemacontract
+
+				- Swagger Schema use application/vnd.ms-azure-apim.swagger.definitions+json
+				- WSDL Schema use application/vnd.ms-azure-apim.xsd+xml
+				- OpenApi Schema use application/vnd.oai.openapi.components+json
+				- WADL Schema use application/vnd.ms-azure-apim.wadl.grammars+xml.
+
+				Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
+			*/
+			var value []byte
+			if documentProperties.Definitions != nil {
+				value, err = json.Marshal(documentProperties.Definitions)
+			}
+			log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) WNS debugs", schemaID, serviceName, apiName, resourceGroup)
+			if err != nil {
+				log.Printf("[DEBUG] err: %+v", err)
+			}
+			if value != nil {
+				log.Printf("[DEBUG] schema definition: %q", string(value))
+			}
+			if documentProperties.Value != nil {
+				log.Printf("[DEBUG] schema value: %q", *documentProperties.Value)
+			}
+			if documentProperties.Definitions != nil {
+				log.Printf("[DEBUG] schema definition struct: %+v", documentProperties.Definitions)
+			}
+			if *properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || *properties.ContentType == "application/vnd.oai.openapi.components+json" {
+				//var value []byte
+				//err = json.Unmarshal(value, documentProperties.Definitions)
+				d.Set("value", string(value))
+			} else if *properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || *properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
+				d.Set("value", documentProperties.Value)
+			} else {
+				return fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", *properties.ContentType, schemaID, serviceName, apiName, resourceGroup)
+			}
+		}
 	}
 
 	return nil
