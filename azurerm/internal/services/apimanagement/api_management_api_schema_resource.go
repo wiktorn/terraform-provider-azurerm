@@ -99,15 +99,24 @@ func resourceApiManagementApiSchemaCreateUpdate(d *schema.ResourceData, meta int
 		return fmt.Errorf("creating or updating API Schema %q (API Management Service %q / API %q / Resource Group %q): %s", schemaID, serviceName, apiName, resourceGroup, err)
 	}
 
-	resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
+	err := resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+		resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
+		if err != nil {
+			if utils.ResponseWasNotFound(resp.Response) {
+				log.Printf("[DEBUG] WNS debugs - retrying schema get")
+				return resource.RetryableError(fmt.Errorf("Expected schema %q (API Management Service %q / API %q / Resource Group %q) to be created but was in non existent state, retrying", schemaID, serviceName, apiName, resourceGroup))
+			}
+			return resource.NonRetryableError(fmt.Errorf("Error geting schema %q (API Management Service %q / API %q / Resource Group %q): %+v", schemaID, serviceName, apiName, resourceGroup, err))
+		}
+		if resp.ID == nil {
+			return resource.NonRetryableError(fmt.Errorf("Cannot read ID for API Schema %q (API Management Service %q / API %q / Resource Group %q): %s", schemaID, serviceName, apiName, resourceGroup, err))
+		}
+		d.SetId(*resp.ID)
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("retrieving API Schema %q (API Management Service %q / API %q / Resource Group %q): %s", schemaID, serviceName, apiName, resourceGroup, err)
+		return fmt.Errorf("Error geting schema %q (API Management Service %q / API %q / Resource Group %q): %+v", schemaID, serviceName, apiName, resourceGroup, err)
 	}
-	if resp.ID == nil {
-		return fmt.Errorf("Cannot read ID for API Schema %q (API Management Service %q / API %q / Resource Group %q): %s", schemaID, serviceName, apiName, resourceGroup, err)
-	}
-	d.SetId(*resp.ID)
-
 	return resourceApiManagementApiSchemaRead(d, meta)
 }
 
@@ -129,6 +138,7 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 		resp, err := client.Get(ctx, resourceGroup, serviceName, apiName, schemaID)
 		if err != nil {
 			if utils.ResponseWasNotFound(resp.Response) {
+				log.Printf("[DEBUG] WNS debugs - retrying schema get")
 				return resource.RetryableError(fmt.Errorf("Expected schema %q (API Management Service %q / API %q / Resource Group %q) to be created but was in non existent state, retrying", schemaID, serviceName, apiName, resourceGroup))
 			}
 			return resource.NonRetryableError(fmt.Errorf("Error geting schema %q (API Management Service %q / API %q / Resource Group %q): %+v", schemaID, serviceName, apiName, resourceGroup, err))
@@ -152,9 +162,26 @@ func resourceApiManagementApiSchemaRead(d *schema.ResourceData, meta interface{}
 
 					Definitions used for Swagger/OpenAPI schemas only, otherwise Value is used
 				*/
+				var value []byte
+				if documentProperties.Definitions != nil {
+					value, err = json.Marshal(documentProperties.Definitions)
+				}
+				log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) WNS debugs", schemaID, serviceName, apiName, resourceGroup)
+				if err != nil {
+					log.Printf("[DEBUG] err: %+v", err)
+				}
+				if value != nil {
+					log.Printf("[DEBUG] schema definition: %q", string(value))
+				}
+				if documentProperties.Value != nil {
+					log.Printf("[DEBUG] schema value: %q", *documentProperties.Value)
+				}
+				if documentProperties.Definitions != nil {
+					log.Printf("[DEBUG] schema definition struct: %+v", documentProperties.Definitions)
+				}
 				if *properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || *properties.ContentType == "application/vnd.oai.openapi.components+json" {
-					var value []byte
-					err = json.Unmarshal(value, documentProperties.Definitions)
+					//var value []byte
+					//err = json.Unmarshal(value, documentProperties.Definitions)
 					d.Set("value", string(value))
 				} else if *properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || *properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
 					d.Set("value", documentProperties.Value)
