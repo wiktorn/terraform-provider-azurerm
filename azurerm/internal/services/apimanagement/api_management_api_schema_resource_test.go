@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
@@ -45,7 +46,7 @@ func TestAccApiManagementApiSchema_basicSwagger(t *testing.T) {
 			Config: r.basicSwagger(data),
 			Check: resource.ComposeTestCheckFunc(
 				check.That(data.ResourceName).ExistsInAzure(r),
-				check.That(data.ResourceName).Key("value").HasValue(string(schema)),
+				check.That(data.ResourceName).Key("value").HasValue(strings.TrimRight(string(schema), "\r\n"),
 			),
 		},
 		data.ImportStep(),
