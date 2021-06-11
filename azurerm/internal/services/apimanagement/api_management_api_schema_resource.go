@@ -54,10 +54,15 @@ func resourceApiManagementApiSchema() *schema.Resource {
 			},
 
 			"value": {
-				Type:             schema.TypeString,
-				Required:         true,
-				DiffSuppressFunc: suppress.JsonDiff,
-				ValidateFunc:     validation.StringIsNotEmpty,
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringIsNotEmpty,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if d.Get("content_type") == "application/vnd.ms-azure-apim.swagger.definitions+json" || d.Get("content_type") == "application/vnd.oai.openapi.components+json" {
+						return suppress.JsonDiff(k, old, new, d)
+					}
+					return old == new
+				},
 			},
 		},
 	}
