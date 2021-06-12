@@ -156,7 +156,22 @@ func resourceApiManagementApiSchemaRead(d *pluginsdk.ResourceData, meta interfac
 
 	if properties := resp.SchemaContractProperties; properties != nil {
 		d.Set("content_type", properties.ContentType)
+
 		if documentProperties := properties.SchemaDocumentProperties; documentProperties != nil {
+			log.Printf("[DEBUG] API Schema %q (API Management Service %q / API %q / Resource Group %q) WNS debugs", schemaID, serviceName, apiName, resourceGroup)
+			if documentProperties.Value != nil {
+				log.Printf("[DEBUG] schema value: %q", *documentProperties.Value)
+			}
+			if documentProperties.Definitions != nil {
+				log.Printf("[DEBUG] schema definition struct: %+v", documentProperties.Definitions)
+				value, err := json.Marshal(documentProperties.Definitions)
+				if err != nil {
+					log.Printf("[DEBUG] err: %+v", err)
+				} else {
+					log.Printf("[DEBUG] value: %q", value)
+				}
+			}
+
 			/*
 				As per https://docs.microsoft.com/en-us/rest/api/apimanagement/2019-12-01/api-schema/get#schemacontract
 
@@ -169,13 +184,16 @@ func resourceApiManagementApiSchemaRead(d *pluginsdk.ResourceData, meta interfac
 			*/
 			if *properties.ContentType == "application/vnd.ms-azure-apim.swagger.definitions+json" || *properties.ContentType == "application/vnd.oai.openapi.components+json" {
 				if documentProperties.Definitions != nil {
+
 					value, err := json.Marshal(documentProperties.Definitions)
 					if err != nil {
 						return fmt.Errorf("[FATAL] Unable to serialize schema to json. Error: %+v. Schema struct: %+v", err, documentProperties.Definitions)
 					}
+					log.Printf("[DEBUG] setting schema from Definitions")
 					d.Set("value", string(value))
 				}
 			} else if *properties.ContentType == "application/vnd.ms-azure-apim.xsd+xml" || *properties.ContentType == "application/vnd.ms-azure-apim.wadl.grammars+xml" {
+				log.Printf("[DEBUG] setting schema from Value")
 				d.Set("value", documentProperties.Value)
 			} else {
 				return fmt.Errorf("[FATAL] Unkown content type %q for schema %q (API Management Service %q / API %q / Resource Group %q)", *properties.ContentType, schemaID, serviceName, apiName, resourceGroup)
