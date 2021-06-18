@@ -255,7 +255,7 @@ func ExpandApiManagementOperationParameterContract(input []interface{}) *[]apima
 			Description:  utils.String(description),
 			Type:         utils.String(paramType),
 			Required:     utils.Bool(required),
-			DefaultValue: utils.String(defaultValue),
+			DefaultValue: defaultValue,
 			Values:       utils.ExpandStringSlice(valuesRaw),
 		}
 		outputs = append(outputs, output)
