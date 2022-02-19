@@ -46,6 +46,26 @@ func TestAccLogicAppActionCustom_requiresImport(t *testing.T) {
 	})
 }
 
+func TestAccLogicAppActionCustom_stepRemoval(t *testing.T) {
+	data := acceptance.BuildTestData(t, "azurerm_logic_app_action_custom", "add_two")
+	r := LogicAppActionCustomResource{}
+
+	data.ResourceTest(t, r, []acceptance.TestStep{
+		{
+			Config: r.threestep(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+			),
+		},
+		{
+			Config: r.twostep(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+			),
+		},
+	})
+}
+
 func (LogicAppActionCustomResource) Exists(ctx context.Context, clients *clients.Client, state *pluginsdk.InstanceState) (*bool, error) {
 	return actionExists(ctx, clients, state)
 }
@@ -89,6 +109,114 @@ resource "azurerm_logic_app_action_custom" "import" {
   body         = azurerm_logic_app_action_custom.test.body
 }
 `, r.basic(data))
+}
+
+func (r LogicAppActionCustomResource) threestep(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+%s
+
+resource "azurerm_logic_app_action_custom" "init" {
+  name         = "init"
+  logic_app_id = azurerm_logic_app_workflow.test.id
+
+  body = <<BODY
+{
+    "inputs": {
+        "variables": [
+            {
+                "name": "var1",
+                "type": "Integer",
+                "value": 1
+            }
+        ]
+    },
+    "runAfter": {},
+    "type": "InitializeVariable"
+}
+BODY
+}
+
+resource "azurerm_logic_app_action_custom" "add_one" {
+  name         = "add_one"
+  logic_app_id = azurerm_logic_app_workflow.test.id
+
+  body = <<BODY
+{
+    "inputs": {
+		"name": "var1",
+		"value": 1
+    },
+    "runAfter": {
+		"${azurerm_logic_app_action_custom.init.name}": ["Succeeded"]
+	},
+    "type": "IncrementVariable"
+}
+BODY
+}
+
+resource "azurerm_logic_app_action_custom" "add_two" {
+  name         = "add_two"
+  logic_app_id = azurerm_logic_app_workflow.test.id
+
+  body = <<BODY
+{
+    "inputs": {
+		"name": "var1",
+		"value": 2
+    },
+    "runAfter": {
+		"${azurerm_logic_app_action_custom.add_one.name}": ["Succeeded"]
+	},
+    "type": "IncrementVariable"
+}
+BODY
+}
+`, r.template(data))
+}
+
+func (r LogicAppActionCustomResource) twostep(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+%s
+
+resource "azurerm_logic_app_action_custom" "init" {
+  name         = "init"
+  logic_app_id = azurerm_logic_app_workflow.test.id
+
+  body = <<BODY
+{
+    "inputs": {
+        "variables": [
+            {
+                "name": "var1",
+                "type": "Integer",
+                "value": 1
+            }
+        ]
+    },
+    "runAfter": {},
+    "type": "InitializeVariable"
+}
+BODY
+}
+
+resource "azurerm_logic_app_action_custom" "add_two" {
+  name         = "add_two"
+  logic_app_id = azurerm_logic_app_workflow.test.id
+
+  body = <<BODY
+{
+    "inputs": {
+		"name": "var1",
+		"value": 2
+    },
+    "runAfter": {
+		"${azurerm_logic_app_action_custom.init.name}": ["Succeeded"]
+	},
+    "type": "IncrementVariable"
+}
+BODY
+}
+`, r.template(data))
 }
 
 func (LogicAppActionCustomResource) template(data acceptance.TestData) string {
